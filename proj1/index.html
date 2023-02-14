@@ -26,17 +26,22 @@
 <h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2018</h1>
 <h1 align="middle">Project 1: Rasterizer</h1>
 <h2 align="middle">Bryce Wong, Lillian Weng, CS184</h2>
-<h2 align="middle">https://lillianw101.github.io/cs184-public/proj1/index.html</h2>
-
-<br><br>
+<div align="middle">
+  <p><a href="https://lillianw101.github.io/cs184-public/proj1/index.html">https://lillianw101.github.io/cs184-public/proj1/index.html</a></p>
+</div>
+<br>
 
 <div>
 
 <h2 align="middle">Overview</h2>
-<p>Give a high-level overview of what you implemented in this project. Think about what you've built as a whole. Share your thoughts on what interesting things you've learned from completing the project.</p>
-
+<p>
+  In this project, we learned how to implement various types of rasterization techniques in order to discretize a continuous photo to display 
+  on a computer screen. Although we ran into a variety of bugs involving triangle boundaries and floating point precision errors, we were 
+  able to implement a variety of sampling methods that gave our image a smoother appearance on screen. All-in-all, it was a very cool project 
+  that felt rewarding to finish.
+</p>
+<br>
 <h2 align="middle">Section I: Rasterization</h2>
-
 <h3 align="middle">Part 1: Rasterizing single-color triangles</h3>
 
 <p>First, we set the width and height boundaries to the min and max (x, y) values of the triangle coordinates to create a bounding box. 
@@ -64,7 +69,7 @@
 <p>
   This is interesting because although we implemented the algorithm, we still see some antialiasing! 
 </p>
-
+<br>
 <h3 align="middle">Part 2: Antialiasing triangles</h3>
 
 <p>The supersampling algorithm utilizes two data structures:
@@ -114,7 +119,7 @@
     </tr>
   </table>
 </div>
-
+<br>
 <h3 align="middle">Part 3: Transforms</h3>
 <p>
   We were trying to make cubeman look like he's flexing his muscles, so we bent it's left arm by adding rotations and transforming accordingly
@@ -126,9 +131,8 @@
   <img src="images/task3flexingman.png" align="middle" width="600px"/>
 </div>
 
-
+<br>
 <h2 align="middle">Section II: Sampling</h2>
-
 <h3 align="middle">Part 4: Barycentric coordinates</h3>
 Given a triangle defined by points A, B, and C and a point P(x, y) within that triangle, we can 
 generate Barycentric coordinates (α, β, γ) for P that are proportional to its distance from the corners (A, B, C) of the triangle. 
@@ -147,7 +151,7 @@ red, green, and blue respectively.
   <img src="images/task4color_wheel.png" align="middle" width="600px"/>
   
 </div>
-
+<br>
 <h3 align="middle">Part 5: "Pixel sampling" for texture mapping</h3>
 For every pixel, we use the same strategy from task 4 to get the Barycentric coordinates (α, β, γ) and used those values 
 to compute the weighted (u, v) values from the given texture endpoints. Depending on user configuration, we will use one of 
@@ -201,15 +205,90 @@ u<sub>01</sub>), then linear interpolate both of those values together to get th
   discretized by nearest neighbor sampling. Bilinear filtering, on the other hand, is able to average together sharp differences (like edges)
   and make the photo appear smoother.
 </p>
-
+<br>
 <h3 align="middle">Part 6: "Level sampling" with mipmaps for texture mapping</h3>
 
+<p>Level sampling requires the use of a mipmap. A mipmap contains multiple resolutions of the original image, where level i+1 of the mipmap 
+  has half the resolution of the previous level (level i). By default, level 0 is set to the original image. To execute level sampling, we first
+  need to calculate the barycentric coordinates (x, y) for our current pixel based on the corners of the triangle we are drawing. After, we can 
+  use those barycentric coordinates to determine the coordinates (u, v)<sub>p</sub> the pixel (x, y) maps to on the triangle texture map. From there, we choose 
+  which level of the mipmap to sample from for each pixel based on the level filter. Let M<sub>i</sub> denote the level mipmap we are sampling from.</p>
+
+<ul>
+  <li>1. Level Zero - Sample (u, v)<sub>p</sub> from mipmap M<sub>0</sub> (level 0). To do this, we get the texel at pixel (u * M<sub>0</sub>.width,
+   v * M<sub>0</sub>.height).</li>
+  <li>2. Level Nearest - To decide which level mipmap to use, we can first calculate the (u, v) coordinates for (x + 1, y) and (x, y + 1) given 
+    the process described above (denoted (u, v)<sub>x</sub> and (u, v)<sub>y</sub> respectively). After, we calculate du/dx and dv/dx from 
+    (u, v)<sub>x</sub> - (u, v)<sub>p</sub> and du/dy and dv/dy from (u, v)<sub>y</sub> - (u, v)<sub>p</sub>. The level D can be calculated from
+    the equations listed below, and we round D to the nearest integer. After, we sample (u, v)<sub>p</sub> from mipmap M<sub>D</sub> (level D), getting the texel at pixel 
+    (u * M<sub>D</sub>.width, v * M<sub>D</sub>.height).
+    <img src="images/level_eq.png" align="middle" width="500px" style="margin-left: 200px;"/></li>
+  <li>3. Bilinear Level Interpolation - First, we calculate D using the process using the same technique from "Level Nearest"; however,
+    we keep D as a float and don't round it. After, we use the mipmaps from levels floor(D) and ceil(D) to obtain two color values for (u, v)<sub>p</sub>.
+    We then interpolate those two color values together based on the proportion of D between its floor and ceiling. For example, if D = 4.2, we would 
+    interpolate more from the level 4 mipmap than the level 5 mipmap, scaling by 0.8 and 0.2 respectively.
+  </li>
+</ul>
+
+<p>
+  The tradeoffs between pixel sampling, level sampling, and supersampling (number of samples per pixel) are as follows:
+</p>
+
+<ul>
+  <li>
+    1. Pixel Sampling: Pixel sampling uses less memory than the other two methods because it does not require any additional storage of information
+    except for the texture that it draws. While the calculation required is less than the other two methods, we still calculate barycentric coordinates 
+    for each pixel and map a corresponding texture based on the pixel sampling method (nearest neighbor or bilinear interpolation). In terms of antialiasing,
+    nearest neighbor has little-to-no smoothing whereas bilinear interpolation, although a bit slower, produces a smoother image (though fine details 
+    may be blurred a bit).
+  </li>
+  <li>
+    2. Level Sampling: Since level sampling requires the use of a mipmap, it uses 4/3rds the memory of the original texture it is trying to map.
+    Additionally, calculating the level of the mipmap requires extra computation (where L_ZERO < L_NEAREST < L_LINEAR in terms of runtime) in 
+    addition to barycentric coordinates. In terms of antialiasing, this strategy results in a much smoother photo and reduces more 
+    antialiasing than that of pixel sampling with bilinear interpolation.
+  </li>
+  <li>3. Supersampling: Supersampling requires a significant amount of memory that is dependent on its sampling rate. Specifically, a sampling rate 
+    of r requires r times more memory than the size of the original photo. Since we sample r times within each pixel, the runtime also 
+    increases proportionally to r; therefore, supersampling is the slowest of the three methods. In terms of antialiasing, it is as good as level 
+    sampling given a high enough sample rate.
+  </li>
+</ul>
+
+<p>Some examples of these effects are shown below on the cute doggo named Nori :D</p>
+
+<div align="middle">
+  <table style="width: 100%;">
+    <tr>
+      <td>
+        <img src="images/l_zero_p_nearest.png" align="middle" width="500px"/>
+        <figcaption align="middle">Level Zero, Nearest Pixel Sampling</figcaption>
+      </td>
+      <td>
+        <img src="images/l_zero_p_linear.png" align="middle" width="500px"/>
+        <figcaption align="middle">Level Zero, Bilinear Interpolation Pixel Sampling</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/l_nearest_p_nearest.png" align="middle" width="500px" style="margin-top: 20px;"/>
+        <figcaption align="middle">Level Nearest, Nearest Pixel Sampling</figcaption>
+      </td>
+      <td>
+        <img src="images/l_nearest_p_linear.png" align="middle" width="500px" style="margin-top: 20px;"/>
+        <figcaption align="middle">Level Nearest, Bilinear Interpolation Pixel Sampling</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+</p>
+<br>
 
 
 <h2 align="middle">Section III: Art Competition</h2>
-<p>If you are not participating in the optional art competition, don't worry about this section!</p>
-
-<h3 align="middle">Part 7: Draw something interesting!</h3>
+<p>We did not participate in this competition.</p>
 
 </body>
 </html>
