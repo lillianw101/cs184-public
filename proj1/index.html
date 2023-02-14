@@ -1,7 +1,214 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Project 1 here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+</style>
+<title>CS 184 Rasterizer</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2018</h1>
+<h1 align="middle">Project 1: Rasterizer</h1>
+<h2 align="middle">Bryce Wong, Lillian Weng, CS184</h2>
+
+<br><br>
+
+<div>
+
+<h2 align="middle">Overview</h2>
+<p>Give a high-level overview of what you implemented in this project. Think about what you've built as a whole. Share your thoughts on what interesting things you've learned from completing the project.</p>
+
+<h2 align="middle">Section I: Rasterization</h2>
+
+<h3 align="middle">Part 1: Rasterizing single-color triangles</h3>
+
+<p>First, we set the width and height boundaries to the min and max (x, y) values of the triangle coordinates to create a bounding box. 
+  Then, we rasterized triangles by using the line equation formula from lecture 2, slide 43:</p>
+<div style="text-align: center;">
+  <span style="font-size: 20px;"><b>L(x, y) = - (x - x0) (y1 - y0) + (y - y0) (x1 - x0)</b></span>
+</div>
+<p> This formula takes the dot product between the vectors V(x, y) and N(P0, P1), where P0 = (x0, y0), P1 = (x1, y1),
+  and N is the normal vector of the two points. We calculate this for every pixel (x, y) inside our bounding box
+  for all 3 pairs of triangle points (P0 = (x0, y0), P1 = (x1, y1)), (P0 = (x1, y1), P1 = (x2, y2)), and (P0 = (x2, y2), P1 = (x0, y0)). 
+  We then checked if all 3 L(x, y) values were either greater than or equal to 0 or less than or equal to 0, indicating that the pixel is inside the triangle.
+  If that was true, we'd color the pixel the color given by the function statement.
+ </p>
+ <br> 
+ <p> 
+  The runtime of our algorithm is given by O(w * h) where w and h are the width and height of our bounding box, respectively. Since we 
+  iterate through each pixel in our bounding box and do a finite number of calculations and checks for the line test, we have O(1) 
+  runtime per pixel. Therefore, the runtime is no worse than one that checks each sample within the bounding box of the triangle.
+  </p>
+
+<div align ="middle">
+  <img src="images/task1test4.png" align="middle" width="800px"/>
+</div>
+
+<p>
+  This is interesting because although we implemented the algorithm, we still see some antialiasing! 
+</p>
+
+<h3 align="middle">Part 2: Antialiasing triangles</h3>
+
+<p>The supersampling algorithm utilizes two data structures:
+  </p>
+<ul>
+  <li>1. rgb_framebuffer_target: the buffer of pixels that are displayed on the computer screen <b>(dimensions width x height)</b></li>
+  <li>2. sample_buffer: the internal color sample buffer that contains all samples of the original image <b>(dimensions width * sqrt(sample_rate) x height * sqrt(sample_rate))</b></li>
+</ul>
+
+<p>
+  To supersample, we upscaled the image by a factor of sqrt(sample_rate) and rasterized a higher-dimensional image into the sample_buffer
+  using the same strategy from task 1. After, the image was downsampled from the sample_buffer into the rgb_framebuffer_target by 
+  grouping samples in the sample_buffer by sqrt(sample_size) x sqrt(sample_size) squares, then averaging the RGB values into 1 pixel that
+  corresponds to its location on the rgb_framebuffer_target. This involved changing rasterize_triangle to sample sqrt(sample_rate) times 
+  at each pixel, as well as implementing functions to dynamically change the size of sample_buffer based on the sample_rate. Additionally,
+  we changed fill_pixel, rasterize_point, and resolve_to_framebuffer to conform with the new sample_buffer size and translate pixels 
+  from the sample_buffer to the rgb_framebuffer_target. <br><br>
+  
+  Supersampling is useful because it allows us to compute the color of one pixel
+  by averaging the color of multiple samples within that pixel's area. Therefore, this prevents large gaps or prominent jaggies with 
+  our image, making it appear smoother and giving the illusion of a higher-resolution photo. We antialiased our triangles by sampling 
+  sqrt(sample_rate) times for each pixel, then averaging those values together into the rgb_framebuffer_target.
+</p>
+
+<div align="middle">
+  <table style="width: 100%;">
+    <tr>
+      <td>
+        <img src="images/task2test4sr1.png" align="middle" width="600px"/>
+        <figcaption align="middle">Supersample Rate: 1 per pixel</figcaption>
+      </td>
+      <td>
+        <img src="images/task2test4sr4.png" align="middle" width="600px"/>
+        <figcaption align="middle">Supersample Rate: 4 per pixel</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/task2test4sr16.png" align="middle" width="600px"/>
+        <figcaption align="middle">Supersample Rate: 16 per pixel</figcaption>
+      </td>
+      <td style="padding: 5%;">
+        We notice these effects since increasing the supersample rate causes there to be less antialiasing since we are able 
+        to average across more samples and obtain a smoother pixel image.
+      </td>
+    </tr>
+  </table>
+</div>
+
+<h3 align="middle">Part 3: Transforms</h3>
+<p>
+  We were trying to make cubeman look like he's flexing his muscles, so we bent it's left arm by adding rotations and transforming accordingly
+  so that the arm looks like it's coming out of the right place in it's socket. We also did something similar with the right arm by rotating it up,
+  but we didn't bend it to make the photo look more interesting. We also tilted the head to give the character more personality!
+</p>
+<div align="middle">
+  <h3>Flexing Man!</h3>
+  <img src="images/task3flexingman.png" align="middle" width="600px"/>
+</div>
+
+
+<h2 align="middle">Section II: Sampling</h2>
+
+<h3 align="middle">Part 4: Barycentric coordinates</h3>
+Given a triangle defined by points A, B, and C and a point P(x, y) within that triangle, we can 
+generate Barycentric coordinates (α, β, γ) for P that are proportional to its distance from the corners (A, B, C) of the triangle. 
+Additionally, if we assign a color to each corner, Barycentric coordinates allow us to interpolate the color P by taking a weighted
+average of the three colors based on (α, β, γ) for P. An example of this is shown below with each point of the triangle being assigned
+red, green, and blue respectively.
+
+<div align="middle">
+  <img src="images/task4triangle.png" align="middle" width="600px"/>
+  <figcaption align="middle">We determine the color of each point inside the triangle by weighting the colors
+    of each corner based off of its Barycentric coordinates</figcaption>
+</div>
+<br>
+<div align="middle">
+  <h3>Color Wheel!</h3>
+  <img src="images/task4color_wheel.png" align="middle" width="600px"/>
+  
+</div>
+
+<h3 align="middle">Part 5: "Pixel sampling" for texture mapping</h3>
+For every pixel, we use the same strategy from task 4 to get the Barycentric coordinates (α, β, γ) and used those values 
+to compute the weighted (u, v) values from the given texture endpoints. Depending on user configuration, we will use one of 
+the following methods for pixel sampling:<br>
+<ul>
+  <li>1. Nearest neighbor: given a normalized coordinate (u, v), first scale them to the original coordinates of the texture map by multiplying 
+    u and v by (width - 1) and (height - 1), respectively. Then, floor u and v values to the nearest integers to find the pixel's nearest neighbor,
+    taking the texture at those rounded values. </li>
+  <li>2. Bilinear Interpolation: given a normalized coordinate (u, v), first scale them to the original coordinates of the texture map by multiplying 
+    u and v by (width - 1) and (height - 1), respectively. Then, find the pixel's four nearest neighbors u<sub>00</sub>,
+    u<sub>10</sub>, u<sub>01</sub>, and u<sub>11</sub> (where u<sub>00</sub> is the bottom-left neighbor and u<sub>11</sub> is the 
+  upper-right neighbor. After, calculate the linear interpolation of (u<sub>00</sub> and u<sub>10</sub>) and (u<sub>01</sub> and 
+u<sub>01</sub>), then linear interpolate both of those values together to get the texture at that pixel.</li>
+</ul>
+
+<div align="middle">
+  <table style="width: 100%;">
+    <tr>
+      <td>
+        <img src="images/task5bil1.png" align="middle" width="500px"/>
+        <figcaption align="middle">Bilinear Interpolation with a supersample rate of 1 sample per pixel</figcaption>
+      </td>
+      <td>
+        <img src="images/task5nearest1.png" align="middle" width="500px"/>
+        <figcaption align="middle">Nearest Neighbor with a supersample rate of 1 sample per pixel</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/task5bil16.png" align="middle" width="500px"/>
+        <figcaption align="middle">Bilinear Interpolation with a supersample rate of 16 samples per pixel</figcaption>
+      </td>
+      <td>
+        <img src="images/task5nearest16.png" align="middle" width="500px"/>
+        <figcaption align="middle">Nearest Neighbor with a supersample rate of 16 samples per pixel</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<p>
+  The difference between nearest neighbor and bilinear interpolation is most obvious when we supersample at 1 sample per pixel. The 
+  bilinear interpolatation image appears much smoother than the nearest neighbor image since each pixel weighs the texture of the pixels around it. 
+  The difference is less pronounced when supersampling at a rate of 16 samples per pixel because supersampling already averages values within each 
+  pixel to produce a smoother appearance (though bilinear filtering makes the smaller imperfections less pronounced). 
+</p>
+
+<p>
+  We can expect there to be a large difference between the two methods with textures that include many fine details/features that are somewhat
+  discretized by nearest neighbor sampling. Bilinear filtering, on the other hand, is able to average together sharp differences (like edges)
+  and make the photo appear smoother.
+</p>
+
+<h3 align="middle">Part 6: "Level sampling" with mipmaps for texture mapping</h3>
+
+
+
+<h2 align="middle">Section III: Art Competition</h2>
+<p>If you are not participating in the optional art competition, don't worry about this section!</p>
+
+<h3 align="middle">Part 7: Draw something interesting!</h3>
+
+</body>
 </html>
