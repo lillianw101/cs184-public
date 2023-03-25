@@ -1,7 +1,288 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Project 3-2 here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    background-color: white;
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+  kbd {
+    color: #121212;
+  }
+</style>
+<title>CS 184 Path Tracer</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+
+<script>
+  MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']]
+    }
+  };
+</script>
+<script id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+</script>
+
+</head>
+<body>
+<br />
+<h1 align="middle">Assignment 3-2: Additional Features to PathTracer</h1>
+    <h2 align="middle">Lillian Weng, Bryce Wong</h2>
+    <h2 align="middle"><a href="https://lillianw101.github.io/cs184-public/proj3-2/index.html">https://lillianw101.github.io/cs184-public/proj3-2/index.html</a></h2>
+
+    <div class="padded">
+
+      <h2 align="middle">Overview</h2>
+      <p>For this project, we implemented parts 1 and 2 of this project to add additional features to our ray tracer. In particular, we enabled our ray tracer to render mirror/glass 
+        objects by implemention reflection and refraction. Additionally, we implemented the Microfacet model to render reflective microfacet materials like copper and gold. Most of 
+      the bugs we encountered during this project came from small math mistakes, so much of the debugging occurred by trying to fine-comb our work and see if our equations lined up with the spec.</p>
+
+        <h3 align="middle">Part 1. Mirror and Glass Materials</h3>
+        <p>
+          To simulate both mirror and glass materials, we had to implement BSDF reflect and refract functions where given an input ray vector w<sub>o</sub>, we would store its reflected/refracted 
+          ray vector in *w<sub>i</sub>.
+          <ul>
+            <li>Reflect: For reflection, we simply used the equation *w<sub>i</sub> = -w<sub>o</sub> + 2(w<sub>o</sub> • n)n derived on this
+              <a href="https://cs184.eecs.berkeley.edu/sp23/lecture/14-13/material-modeling">slide</a>, where n is the normal vector on the z-axis (i.e. (0, 0, 1)).</li>
+            <li>Refract: For refraction, we first calculated the value of `eta`, where `eta` = `ior` (index of refraction) if the ray is exiting the surface and `eta` = 1 / `ior`
+                if the ray is entering the surface (the ray enters the surface if w<sub>o</sub> • n > 0). After, we check if there is total internal reflection occuring within our object by 
+                determining if `cos_theta_p` = 1 - `eta`<sup>2</sup> * (1 - w<sub>o</sub>.z<sup>2</sup>) &lt; 0; if this is true, refraction does not occur and we leave *w<sub>i</sub>
+                unmodified. Finally, if `cos_theta_p` is >= 0, we use spherical coordinates to calculate our new *w<sub>i</sub>, where:
+                <ul>
+                  <li>*w<sub>i</sub>.x = -eta * w<sub>o</sub>.x</li>
+                  <li>*w<sub>i</sub>.y = -eta * w<sub>o</sub>.y</li>
+                  <li>*w<sub>i</sub>.z = cos_theta_p * (1 if w<sub>o</sub>.z < 0, else -1)</li>
+                </ul>
+            </li>
+          </ul>
+          After, we implemented mirror material by implementing MirrorBSDF::sample_f(), first reflecting *wi, setting *pdf = 1, and returning reflectance / abs_cos_theta(*wi). Similarly,
+          we implemented refractive material by implementing RefractionBDSF::sample_f(), first refracting *wi, checking if this was a valid refraction (set *pdf to 0 if not), then 
+          setting *pdf = 1 and returning transmittance / abs_cos_theta(*wi) / eta<sup>2</sup>.<br><br>
+
+          Finally, to implement glass material, we would go to each pixel and use Schlick's reflection coefficient to determine the probablility of whether a ray would be reflected 
+          or refracted (i.e. implmement both reflection and refraction within our glass objects). The Schlick approximation is a simplification of the Fresnel equations that describe 
+          this phenomenon, and it can be cacluated by using the following equation:
+        </p>
+        <div align="middle">
+          <img src="images/schlick.png" width="400px" />
+        </div>
+        <p>Here, we set n<sub>1</sub> = 1 to simulate air, and n<sub>2</sub> = `ior`. After, if there is total internal reflection, we would reflect with *pdf = 1; otherwise, we would 
+          calculate R, then either reflect the ray with probablility R or refract the ray with probability 1 - R, weighing our returned sample ray based on this coefficient.</p>
+        
+        <p><b>
+            Show a sequence of six images of scene `CBspheres.dae` rendered with `max_ray_depth` set to 0, 1, 2, 3, 4, 5, and 100. The other settings should be at least 64 samples per pixel and 4 samples per light. Make sure to include all screenshots.
+        </b></p>
+        The following images were rendered with this command: `./pathtracer -t 8 -s 256 -l 4 -m [rays] -f [filename] ../dae/sky/CBspheres.dae`<br>
+        [rays] was set to `max_ray_depth`, and we set [filename] to "sphere_rays_[max_ray_depth].png"<br><br>
+        <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                  <img src="images/sphere_rays_0.png" align="middle" width="400px"/> 
+                  <figcaption>max_ray_depth = 0</figcaption>
+                  <br>
+                </td>
+                <td>
+                  <img src="images/sphere_rays_1.png" align="middle" width="400px"/> 
+                  <figcaption>max_ray_depth = 1</figcaption>
+                  <br>
+                </td>
+              </tr>
+              <tr align="center">
+                <td>
+                  <img src="images/sphere_rays_2.png" align="middle" width="400px"/> 
+                  <figcaption>max_ray_depth = 2</figcaption>
+                  <br>
+                </td>
+                <td>
+                  <img src="images/sphere_rays_3.png" align="middle" width="400px"/> 
+                  <figcaption>max_ray_depth = 3</figcaption>
+                  <br>
+                </td>
+              </tr>
+              <tr align="center">
+                <td>
+                  <img src="images/sphere_rays_4.png" align="middle" width="400px"/> 
+                  <figcaption>max_ray_depth = 4</figcaption>
+                  <br>
+                </td>
+                <td>
+                  <img src="images/sphere_rays_5.png" align="middle" width="400px"/> 
+                  <figcaption>max_ray_depth = 5</figcaption>
+                  <br>
+                </td>
+              </tr>
+              <tr align="center">
+                <td>
+                  <img src="images/sphere_rays_100.png" align="middle" width="400px"/> 
+                  <figcaption>max_ray_depth = 100</figcaption>
+                  <br>
+                </td>
+              </tr>
+
+            </table>
+          </div>
+        <br>
+        <p><b>
+            Point out the new multibounce effects that appear in each image. 
+        </b></p>
+        <p>
+            As we increased the number of bounces in each image, we started to see more reflective/refractive properties within the glass spheres. In particular, 
+            the left sphere is purely reflective (mirror), which means that the surface of the sphere displays its surroundings. However, the right sphere is both reflective 
+            and refractive (glass), which means some of the light rays enter the sphere and create a more glass-like appearance.
+        </p>
+        <br>
+        <p><b>
+            Explain how these bounce numbers relate to the particular effects that appear. Make sure to include all screenshots.
+        </b></p>
+        <p>
+            <ul>
+              <li>M = 0: Since we have a max_ray_depth of 0, everything in the scene except the light source itself will be black; therefore, nothing is rendered except the light.</li>
+              <li>M = 1: Given a max_ray_depth of 1, the entire scene is lit up except the spheres which are mostly black. This occurs since the materials themselves don't have any color;
+                they reflect the rays from their surroundings. However, the spheres do reflect some of the light source since we do provide one bounce.
+              </li>
+              <li>M = 2: Given a max_ray_depth of 2, the left ball is able to reflect the entirety of its surroundings. However, the right ball still appears a bit cloudy since that ball is
+                bot reflecting and refracting the rays that enter it; however, neither sphere is entirely black now.
+              </li>
+              <li>M = 3: Given a max_ray_depth of 3, the right sphere appears a bit clearer due to more light being transmitted throughout the sphere (i.e. more refraction/reflection).</li>
+              <li>M = 4: Given a max_ray_depth of 4, the right sphere now casts a bit of light onto the right wall which may be a result of allowing for more reflection.</li>
+              <li>M = 5: The scenes between M = 4 and M = 5 are very similar; however, the M = 5 scene is a bit brighter.</li>
+              <li>M = 100: At a max_ray_depth of 100, it seems like the image has converged. The image is a bit brighter than M = 5, and both spheres look very clear at this stage.</li>
+            </ul>
+        </p>
+        <br>
+
+
+        <h3 align="middle">Part 2. Microfacet Material</h3>
+        <p>
+          To implmement the Microfacet model, we first had to define the BRDF evaluation function MicrofacetBSDF::f() given the Fresnel term F, the shadow-masking term G, and 
+          the normal distribution function N. This relationship is shown in the image below:
+        </p>
+        <div align="middle">
+          <img src="images/brdf_eval.png" width="400px" />
+        </div>
+        <p>In particular, the Fresnel term for air-conductor materials is wavelength dependent, depending on the `eta` and `k` values of the microfacet material that we are trying to simulate.
+            As such, we would pass in the `eta` and `k` values of our material into this Fresnel term and the incident ray `wi` which would output the Vector3D Fresnel term we needed
+            for our evaluation function. The equations are shown below:
+        </p>
+        <div align="middle">
+          <img src="images/fresnel.png" width="400px" />
+        </div>
+        <p>Additionally, the normal distribution function (NDF) simulates how the normals of the microfacet material are distributed given the half-vector `h` between the incident and 
+          outgoing rays `wi` and `wo` respectively. The NDF used for this material is derived from the Beckmann distribution, which is similar to a Gaussian distribution but relies on
+          the roughness of the surface $\alpha$ and `theta_h`, or the angle between the half-vector `h` and the surface normal `n` (where `n` is the normal vector for the z-axis). This 
+          equation is also defined below:
+        </p>
+        <div align="middle">
+          <img src="images/ndf.png" width="400px" />
+        </div>
+        <p>The shadow-masking term G is simply defined as 1 / (1 + Lambda(wi) + Lambda(wo)), where the Lambda function is unique to the microfacet distribution (in this case, the Beckmann distribution).</p>
+        <p>After defining our model, we implemented importance sampling for our BRDF model such that we prioritize sampling on parts of our image that is consistent with the Beckmann
+          distribution. This is much more efficient than sampling with cosine hemisphere sampling and would cause the rendered image to converge faster. We achieved this by sampling a microfacet
+          normal vector `h` to reflect our outgoing ray `wo` by from pdfs created by applying the inversion method on the Beckman NDF, then calculating the pdf of the sampled `wi` with respect to the solid angle.
+        </p>
+        <p><b>
+            Show a screenshot sequence of 4 images of scene `CBdragon_microfacet_au.dae` rendered with $\alpha$ set to 0.005, 0.05, 0.25 and 0.5. The other settings should be at least 128 samples per pixel and 1 samples per light. The number of bounces should be at least 5. Describe the differences between different images. Note that, to change the $\alpha$, just open the .dae file and search for `microfacet`.
+        </b></p>
+        The following images were rendered with this command: `./pathtracer -t 8 -s 256 -l 4 -m 5 -f [filename] ../dae/sky/CBdragon_microfacet_au.dae`, changing $\alpha$ manually in the .dae file.<br>
+        We set [filename] to "dragon_[$\alpha$].png"<br><br>
+        <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                  <img src="images/dragon_0.005.png" align="middle" width="400px"/> 
+                  <figcaption>$\alpha$ = 0.005</figcaption>
+                  <br>
+                </td>
+                <td>
+                  <img src="images/dragon_0.05.png" align="middle" width="400px"/> 
+                  <figcaption>$\alpha$ = 0.05</figcaption>
+                  <br>
+                </td>
+              </tr>
+              <tr align="center">
+                <td>
+                  <img src="images/dragon_0.25.png" align="middle" width="400px"/> 
+                  <figcaption>$\alpha$ = 0.25</figcaption>
+                  <br>
+                </td>
+                <td>
+                  <img src="images/dragon_0.5.png" align="middle" width="400px"/> 
+                  <figcaption>$\alpha$ = 0.5</figcaption>
+                  <br>
+                </td>
+              </tr>
+            </table>
+          </div>
+        <p>
+            The $\alpha$ represents the roughness of the microfacet material of the object. With very small values of $\alpha$, we notice that the dragon is much glossier 
+            and reflective, therefore having a much shinier appearance. As we increase our $\alpha$ value, we see the appearance of the dragon become more gold since our 
+            material is becoming rougher and is less reflective/absorbs the light more. Additionally, our images with lower $\alpha$ values are a bit noisier due to the 
+            increased reflectiveness of the microfacet material whereas larger $\alpha$s don't exhibit as much noise.
+        </p>
+        <br>
+        <p><b>
+            Show two images of scene `CBbunny_microfacet_cu.dae` rendered using cosine hemisphere sampling (default) and your importance sampling. The sampling rate should be fixed at 64 samples per pixel and 1 samples per light. The number of bounces should be at least 5. Briefly discuss their difference.
+        </b></p>
+        The following images were rendered with this command: `./pathtracer -t 8 -s 64 -l 1 -m 5 -f [filename] ../dae/sky/CBbunny_microfacet_cu.dae`, changing $\alpha$ manually in the .dae file.<br>
+        We set [filename] to "bunny_default.png" and "bunny_importance.png" respectively for cosine hemisphere sampling and importance sampling.<br><br>
+        <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                  <img src="images/bunny_default.png" align="middle" width="400px"/> 
+                  <figcaption>Cosine Hemisphere Sampling</figcaption>
+                  <br>
+                </td>
+                <td>
+                  <img src="images/bunny_importance.png" align="middle" width="400px"/> 
+                  <figcaption>Importance Sampling</figcaption>
+                  <br>
+                </td>
+              </tr>
+            </table>
+          </div>
+        <p>
+            With cosine hemisphere sampling, we see that the general shape of the bunny is rendered; however, there are many white specks on the bunny's surface since those 
+            pixels have yet to converge. With importance sampling, since we model our pdf to closely resemble the normal distribution function (NDF), we see 
+            that most of the pixels on the bunny's surface are rendered properly given the same number of samples per pixel (64) and samples per light (1).
+        </p>
+        <br>
+        <p><b>
+            Show at least one image with some other conductor material, replacing `eta` and `k`. Note that you should look up values for real data rather than modifying them arbitrarily. Tell us what kind of material your parameters correspond to. 
+        </b></p>
+        The following image was rendered with this command: `./pathtracer -t 8 -s 256 -l 4 -m 5 -f dragon_bismuth.png ../dae/sky/CBdragon_microfacet_au.dae`<br><br>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/dragon_bismuth.png" width="480px" />
+                    <figcaption align="middle">Bismuth Dragon</figcaption>
+                </tr>
+            </table>
+          </div>
+        <p>
+            We used the following `eta` and `k` values to represent the microfacet material bismuth at wavelengths 614 nm, 549 nm, and 466 nm (for red, green, blue respectively):
+            <ul>
+                <li>`eta`: [2.2260, 2.0273, 1.7531]</li>
+                <li>`k`: [3.0795, 2.8541, 2.5252]</li>
+            </ul>
+        </p>
+        
+        <h2 align="middle">Partner Collaboration</h2>
+        <p>For this project, we both worked on the project concurrently, taking turns writing code and communicating ideas (i.e. driver/passenger model). Overall, we thought the collaboration 
+          went really well and was pretty efficient, especially since we spent a while working on project 3-1 and figuring out how the initial ray tracer was implemented.</p>
+</body>
 </html>
+
